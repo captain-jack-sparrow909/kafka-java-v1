@@ -23,7 +23,7 @@ public class ProducerDemoWithCallback {
         KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
 
         //create a producer record
-        ProducerRecord<String, String> record = new ProducerRecord<>("demo_java_topic", "Hello, Kafka!");
+        ProducerRecord<String, String> record = new ProducerRecord<>("demo_java_topic", "Hello, Kafka with Callback!");
 
         //send the record
         producer.send(record, ((recordMetadata, e) -> {
