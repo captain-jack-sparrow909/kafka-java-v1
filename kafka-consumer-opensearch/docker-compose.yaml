@@ -1,0 +1,23 @@
+version: '3.7'
+services:
+  opensearch:
+    image: opensearchproject/opensearch:1.2.4
+    environment:
+      - discovery.type=single-node #this is required for single-node mode
+      - plugins.security.disabled=true # disable security plugin for simplicity, https and logins
+      - compatibility.override_main_response_version=true # compatibility with OpenSearch 1.2.4
+    ports:
+        - "9200:9200" # OpenSearch HTTP port, use this to connect to OpenSearch
+        - "9600:9600" # OpenSearch transport port
+
+# console at http://localhost:5601/app/dev_tools#/console
+# it allows you to run OpenSearch queries
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:1.2.0
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200  # OpenSearch host URL
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true # disable security plugin for simplicity
+    ports:
+      - "5601:5601" # OpenSearch Dashboards port
+    depends_on:
+      - opensearch

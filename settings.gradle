@@ -1,4 +1,5 @@
 rootProject.name = 'first-java-kafka'
 include 'kafka-basics'
 include 'kafka-wikimedia'
+include 'kafka-consumer-opensearch'
 
