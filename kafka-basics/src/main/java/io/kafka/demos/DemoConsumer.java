@@ -43,6 +43,12 @@ public class DemoConsumer {
         while (true){
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000)); //will wait for 1 second for new records
             //if no new records are found, it will return an empty ConsumerRecords object, and the loop will continue, it'll wait for the next poll
+//            "Ask Kafka for any available records, and wait up to 1000 milliseconds (1 second) for them to arrive."
+//            In this case, it will:
+//                Return immediately if there are records already in the buffer.
+//                        Wait up to 1 second for new records if none are available.
+//                        Return an empty ConsumerRecords if still nothing after 1 second.
+
             for(ConsumerRecord<String, String> record : records){
                 //process each record
                 logger.info("Received new record: \nKey: {}\nValue: {}\nPartition: {}\nOffset: {}\nTimestamp: {}",
