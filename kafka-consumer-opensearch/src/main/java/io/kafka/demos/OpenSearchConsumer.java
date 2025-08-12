@@ -1,5 +1,6 @@
 package io.kafka.demos;
 
+import com.google.gson.JsonParser;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -7,6 +8,7 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -78,6 +80,10 @@ public class OpenSearchConsumer {
         return new KafkaConsumer<>(properties);
     }
 
+    public static String extractId(String json){
+        return JsonParser.parseString(json).getAsJsonObject().get("meta").getAsJsonObject().get("id").getAsString();
+    }
+
     public static void main(String[] args) throws IOException {
         Logger logger = LoggerFactory.getLogger(OpenSearchConsumer.class.getSimpleName());
 
@@ -104,8 +110,17 @@ public class OpenSearchConsumer {
             while(true){
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000)); //will wait for 1 second for new records
                 records.forEach(record -> {
+                    //making our system idempotent by using the record key as the document ID in OpenSearch
+                    //approach 1:
+//                    String id = record.topic() + "_" + record.partition() + "_" + record.offset();
+                    //approch 2: extract id from the payload
+                    String id = extractId(record.value());
+
                     //send the record to open search
-                    IndexRequest indexRequest = new IndexRequest("wikimedia").source(record.value(), XContentType.JSON);
+                    IndexRequest indexRequest = new IndexRequest("wikimedia").source(record.value(), XContentType.JSON).id(id);
+                    //with the id added, now if we try to index the same record again, it will not create a duplicate document, but will update the existing one.
+                    //if you want to create a new document every time, you can remove the id from the index request, but your system will not be idempotent anymore.
+
                     try {
                         IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
                         logger.info("Record id: {} indexed to OpenSearch: \nKey: {}\nValue: {}\nPartition: {}\nOffset: {}\nTimestamp: {}",response.getId(),
