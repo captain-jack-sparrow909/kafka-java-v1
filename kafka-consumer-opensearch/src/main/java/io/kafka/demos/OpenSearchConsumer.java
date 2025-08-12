@@ -12,6 +12,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
@@ -107,6 +109,8 @@ public class OpenSearchConsumer {
                 logger.info("Index already exists, skipping creation.");
             }
 
+            BulkRequest bulkRequest = new BulkRequest();
+
             while(true){
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000)); //will wait for 1 second for new records
                 records.forEach(record -> {
@@ -121,15 +125,36 @@ public class OpenSearchConsumer {
                     //with the id added, now if we try to index the same record again, it will not create a duplicate document, but will update the existing one.
                     //if you want to create a new document every time, you can remove the id from the index request, but your system will not be idempotent anymore.
 
-                    try {
-                        IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
-                        logger.info("Record id: {} indexed to OpenSearch: \nKey: {}\nValue: {}\nPartition: {}\nOffset: {}\nTimestamp: {}",response.getId(),
-                                record.key(), record.value(), record.partition(), record.offset(), record.timestamp());
-                    } catch (IOException e) {
-                        logger.error("Error indexing record to OpenSearch: ", e);
-                    }
+                    bulkRequest.add(indexRequest);
+
+                    //below is approach for a single request, which is inefficient, instead we can use bulk requests to send multiple records at once
+//                    try {
+//                        IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+//                        logger.info("Record id: {} indexed to OpenSearch: \nKey: {}\nValue: {}\nPartition: {}\nOffset: {}\nTimestamp: {}",response.getId(),
+//                                record.key(), record.value(), record.partition(), record.offset(), record.timestamp());
+//                    } catch (IOException e) {
+//                        logger.error("Error indexing record to OpenSearch: ", e);
+//                    }
                 });
+
+                //send the bulk request to OpenSearch
+                if(bulkRequest.numberOfActions() > 0) {
+                    BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                    logger.info("Bulk request sent to OpenSearch with {} actions.", bulkRequest.numberOfActions());
+                    try {
+                        Thread.sleep(1000); // sleep for 1 second to simulate processing time, and increase our chances of batching more records together
+                        //this is not must though
+                    } catch (InterruptedException e) {
+                        logger.error("Thread interrupted while sleeping: ", e);
+                    }
+                    if(bulkResponse.hasFailures()) {
+                        logger.error("Bulk request failed with errors: {}", bulkResponse.buildFailureMessage());
+                    } else {
+                        logger.info("Bulk request successful, indexed {} records.", bulkResponse.getItems().length);
+                    }
+                }
             }
+
         } catch (Exception e) {
             logger.error("Error occurred while consuming records: ", e);
         }
