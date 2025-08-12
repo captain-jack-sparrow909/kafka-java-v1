@@ -8,14 +8,13 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestHighLevelClient;
@@ -99,6 +98,20 @@ public class OpenSearchConsumer {
         String topic = "wikimedia.recentchange";
         consumer.subscribe(Arrays.asList(topic));
 
+        //adding shut down hook:
+        final Thread mainThread = Thread.currentThread();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{
+            logger.info("Received shutdown signal, closing the consumer and OpenSearch client");
+            consumer.wakeup(); //this will throw an exception in the poll() method, which will break the loop and allow us to close the consumer
+            try {
+                mainThread.join();
+            }
+            catch (InterruptedException e) {
+                logger.error("Error while waiting for main thread to finish: ", e);
+            }
+        }));
+
         //creating index on open search client:
         try(openSearchClient; consumer){  //this will automatically close the client when done
             boolean indexExists = openSearchClient.indices().exists(new GetIndexRequest("wikimedia"), RequestOptions.DEFAULT);
@@ -155,8 +168,17 @@ public class OpenSearchConsumer {
                 }
             }
 
-        } catch (Exception e) {
-            logger.error("Error occurred while consuming records: ", e);
+        } catch (WakeupException e){
+            //this exception is thrown when the consumer.wakeup() method is called
+            //it is used to interrupt the consumer.poll() method and allow the main thread to exit gracefully
+            logger.info("Consumer wakeup exception caught. Exiting...");
+        } catch (IOException e) {
+            logger.error("Error occurred while creating OpenSearch client or indexing records: ", e);
+        } finally {
+            consumer.close();
+            logger.info("Kafka consumer closed.");
+            openSearchClient.close();
+            logger.info("OpenSearch client closed.");
         }
     }
 }
