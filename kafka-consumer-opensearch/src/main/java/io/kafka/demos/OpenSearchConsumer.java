@@ -48,6 +48,7 @@ public class OpenSearchConsumer {
 
         } else {
             // REST client with security
+
             String[] auth = userInfo.split(":");
 
             CredentialsProvider cp = new BasicCredentialsProvider();
