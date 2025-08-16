@@ -40,6 +40,7 @@ public class DemoConsumerWithShutdown {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             logger.info("Shutdown hook triggered. Closing consumer ");
             consumer.wakeup();  //this will interrupt the consumer.poll() method and allow the main thread to exit gracefully
+
             try {
                 mainThread.join(); //wait for the main thread to finish
             } catch (InterruptedException e) {
